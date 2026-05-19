@@ -45,15 +45,15 @@ class SmsNotificationListener : NotificationListenerService() {
 
         if (allText.isBlank()) return
 
-        // 从所有文本中提取手机号
-        val phoneNumber = extractPhoneNumber(allText)
-            ?: extractPhoneNumber(title)
-            ?: title.takeIf { it.isNotBlank() }  // 兜底：用标题本身
-
         // 发送方显示名称：优先用 subText（有些app放这里），其次 title
         val senderDisplayName = subText.takeIf { it.isNotBlank() }
             ?: title.takeIf { it.isNotBlank() }
             ?: packageName
+
+        // 从所有文本中提取手机号
+        val phoneNumber = extractPhoneNumber(allText)
+            ?: extractPhoneNumber(title)
+            ?: senderDisplayName
 
         // 短信内容
         val content = text.takeIf { it.isNotBlank() }
@@ -67,7 +67,7 @@ class SmsNotificationListener : NotificationListenerService() {
         val record = SmsRecordEntity(
             phoneNumber = phoneNumber,
             sender = senderDisplayName,
-            content = content,
+            content = content ?: "",
             category = category,
             appLabel = appLabel
         )
