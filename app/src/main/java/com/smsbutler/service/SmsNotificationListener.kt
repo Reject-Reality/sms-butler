@@ -20,9 +20,50 @@ class SmsNotificationListener : NotificationListenerService() {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    // 常见的短信/消息类 App 的包名
+    private val smsPackages = setOf(
+        "com.android.mms",                                // AOSP 短信
+        "com.google.android.apps.messaging",              // Google Messages
+        "com.android.messaging",                          // Android Messages
+        "com.samsung.android.messaging",                  // Samsung Messages
+        "com.oneplus.mms",                                // OnePlus
+        "com.xiaomi.smsextra",                            // 小米
+        "com.miui.smsextra",
+        "com.huawei.message",                             // 华为
+        "com.tencent.mm",                                 // 微信
+    )
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.i("SmsButler", "=== 通知监听服务已连接 ===")
+    }
+
+    override fun onListenerDisconnected() {
+        Log.w("SmsButler", "=== 通知监听服务已断开 ===")
+        super.onListenerDisconnected()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
+
+        // 打印所有通知的来源（调试用）
+        Log.d("SmsButler", "收到通知: package=$packageName")
+
+        // 只处理短信/消息类 App 的通知
+        if (packageName !in smsPackages) return
+
+        Log.i("SmsButler", "=== 匹配到短信通知: $packageName ===")
+
         val extras = sbn.notification.extras
+
+        // 打印所有 extras 用于调试
+        val keys = extras.keySet()
+        keys.forEach { key ->
+            val value = extras.get(key)
+            if (value != null) {
+                Log.d("SmsButler", "  extra[$key] = $value (${value::class.simpleName})")
+            }
+        }
 
         // 获取通知中的文本信息
         val title = extras.getCharSequence("android.title")?.toString()
@@ -38,14 +79,22 @@ class SmsNotificationListener : NotificationListenerService() {
             ?: extras.getString("android.summaryText")
             ?: ""
 
+        Log.d("SmsButler", "  title=$title")
+        Log.d("SmsButler", "  text=$text")
+        Log.d("SmsButler", "  subText=$subText")
+        Log.d("SmsButler", "  summaryText=$summaryText")
+
         // 把所有有效的文本字段拼起来用于提取手机号
         val allText = listOf(title, subText, summaryText, text)
             .filter { it.isNotBlank() }
             .joinToString(" ")
 
-        if (allText.isBlank()) return
+        if (allText.isBlank()) {
+            Log.w("SmsButler", "  所有文本字段为空，跳过")
+            return
+        }
 
-        // 发送方显示名称：优先用 subText（有些app放这里），其次 title
+        // 发送方显示名称
         val senderDisplayName = subText.takeIf { it.isNotBlank() }
             ?: title.takeIf { it.isNotBlank() }
             ?: packageName
@@ -72,7 +121,7 @@ class SmsNotificationListener : NotificationListenerService() {
             appLabel = appLabel
         )
 
-        Log.d("SmsButler", "SMS: phone=$phoneNumber, sender=$senderDisplayName, content=$content, app=$appLabel")
+        Log.i("SmsButler", "插入记录: phone=$phoneNumber, sender=$senderDisplayName, content=$content, app=$appLabel")
 
         scope.launch {
             repository.insertRecord(record)
@@ -81,15 +130,13 @@ class SmsNotificationListener : NotificationListenerService() {
 
     private fun extractPhoneNumber(text: String): String? {
         if (text.isBlank()) return null
-        // 匹配中国手机号：1[3-9]xxxxxxxxx
         val regex = Regex("(?:\\+?86[\\s-]*)?1[3-9]\\d{9}")
         return regex.find(text)?.value?.replace(Regex("[\\s-]"), "")
     }
 
     private fun categorizeSms(text: String): String {
         return when {
-            text.contains("验证码") || text.contains("校验码") || text.contains("驗證碼")
-                || text.contains("验证") || text.contains("校验") -> "验证码"
+            text.contains("验证码") || text.contains("校验码") || text.contains("驗證碼") -> "验证码"
             text.contains("广告") || text.contains("推广") || text.contains("优惠") -> "广告"
             text.contains("流量") || text.contains("余额") || text.contains("账单")
                 || text.contains("套餐") || text.contains("缴费") -> "运营商"
