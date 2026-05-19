@@ -1,0 +1,30 @@
+// Gradle 全局镜像配置 — 确保所有依赖都走国内镜像
+// 此文件在 Gradle 构建启动时自动加载
+
+allprojects {
+    buildscript {
+        repositories {
+            maven { url "https://maven.aliyun.com/repository/public/" }
+            maven { url "https://maven.aliyun.com/repository/google/" }
+            maven { url "https://maven.aliyun.com/repository/gradle-plugin/" }
+        }
+    }
+    repositories {
+        maven { url "https://maven.aliyun.com/repository/public/" }
+        maven { url "https://maven.aliyun.com/repository/google/" }
+    }
+}
+
+gradle.projectsLoaded {
+    rootProject.buildscript {
+        repositories {
+            maven { url "https://maven.aliyun.com/repository/public/" }
+            maven { url "https://maven.aliyun.com/repository/google/" }
+            maven { url "https://maven.aliyun.com/repository/gradle-plugin/" }
+        }
+    }
+    rootProject.repositories {
+        maven { url "https://maven.aliyun.com/repository/public/" }
+        maven { url "https://maven.aliyun.com/repository/google/" }
+    }
+}
