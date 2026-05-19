@@ -56,6 +56,7 @@ class SmsNotificationListener : NotificationListenerService() {
         if (packageName !in smsPackages) return
 
         Log.i("SmsButler", "=== 匹配到短信通知: $packageName ===")
+        Log.d("SmsButler", "  sbn.tag=${sbn.tag}, sbn.id=${sbn.id}, sbn.key=${sbn.key}")
 
         val extras = sbn.notification.extras
 
@@ -116,11 +117,13 @@ class SmsNotificationListener : NotificationListenerService() {
         // App 标签
         val appLabel = getAppLabel(packageName)
 
-        // 获取用户设置的本机号码（用于标记哪张卡收到短信）
+        // 获取用户设置的本机号码
         val myNumbers = runCatching {
             kotlinx.coroutines.runBlocking { preferences.preferences.first().myPhoneNumbers }
         }.getOrDefault(emptyList())
-        val receiverPhone = myNumbers.firstOrNull() ?: ""
+
+        // 只有配置了唯一号码时才自动分配，多卡用户留空让用户手动指定
+        val receiverPhone = if (myNumbers.size == 1) myNumbers.first() else ""
 
         val record = SmsRecordEntity(
             phoneNumber = phoneNumber,
