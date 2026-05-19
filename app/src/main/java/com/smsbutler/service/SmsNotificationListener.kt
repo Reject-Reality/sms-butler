@@ -1,6 +1,7 @@
 package com.smsbutler.service
 
 import android.annotation.SuppressLint
+import android.app.Person
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -103,9 +104,13 @@ class SmsNotificationListener : NotificationListenerService() {
             ?: title.takeIf { it.isNotBlank() }
             ?: packageName
 
+        // 尝试从 Person 对象获取手机号（最常见的位置）
+        val personPhone = extractPhoneFromPeople(extras)
+
         // 从所有文本中提取手机号
         val phoneNumber = extractPhoneNumber(allText)
             ?: extractPhoneNumber(title)
+            ?: personPhone  // 从 Person URI 中提取
             ?: senderDisplayName
 
         // 短信内容
@@ -139,6 +144,30 @@ class SmsNotificationListener : NotificationListenerService() {
         scope.launch {
             repository.insertRecord(record)
         }
+    }
+
+    private fun extractPhoneFromPeople(extras: android.os.Bundle): String? {
+        // android.people.list 里是 Person 对象，其 URI 往往包含 tel:138xxxx1234
+        val people = extras.get("android.people.list") as? ArrayList<*>
+        if (people != null) {
+            for (item in people) {
+                if (item is Person) {
+                    val uri = item.uri
+                    if (uri != null) {
+                        val uriStr = uri.toString()
+                        Log.d("SmsButler", "  Person URI: $uriStr")
+                        val phone = extractPhoneNumber(uriStr)
+                        if (phone != null) return phone
+                    }
+                    // 名字作为备选
+                    val name = item.name?.toString()
+                    if (!name.isNullOrBlank()) {
+                        Log.d("SmsButler", "  Person name: $name")
+                    }
+                }
+            }
+        }
+        return null
     }
 
     private fun extractPhoneNumber(text: String): String? {
