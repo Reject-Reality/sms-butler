@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 data class PhoneSummary(
     val phoneNumber: String,
+    val receiverPhoneNumber: String,
     val count: Int
 )
 
@@ -22,7 +23,7 @@ interface SmsRecordDao {
     @Query("SELECT * FROM sms_records WHERE phoneNumber = :phone ORDER BY receivedAt DESC")
     fun getRecordsByPhone(phone: String): Flow<List<SmsRecordEntity>>
 
-    @Query("SELECT phoneNumber, COUNT(*) as count FROM sms_records GROUP BY phoneNumber ORDER BY count DESC")
+    @Query("SELECT phoneNumber, receiverPhoneNumber, COUNT(*) as count FROM sms_records GROUP BY phoneNumber, receiverPhoneNumber ORDER BY receiverPhoneNumber, count DESC")
     fun getPhoneNumberSummary(): Flow<List<PhoneSummary>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

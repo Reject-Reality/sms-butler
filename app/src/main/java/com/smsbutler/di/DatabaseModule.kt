@@ -21,7 +21,8 @@ object DatabaseModule {
             context,
             SmsDatabase::class.java,
             "sms_butler.db"
-        ).build()
+        ).fallbackToDestructiveMigration()
+         .build()
     }
 
     @Provides

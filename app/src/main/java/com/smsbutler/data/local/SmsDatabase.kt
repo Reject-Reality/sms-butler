@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [SmsRecordEntity::class, BookmarkEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SmsDatabase : RoomDatabase() {

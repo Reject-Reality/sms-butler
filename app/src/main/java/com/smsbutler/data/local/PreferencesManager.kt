@@ -18,7 +18,8 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 data class UserPreferences(
     val recordContent: Boolean = false,
     val notificationPermissionGranted: Boolean = false,
-    val themeMode: String = "system"
+    val themeMode: String = "system",
+    val myPhoneNumbers: List<String> = emptyList()
 )
 
 @Singleton
@@ -29,13 +30,17 @@ class PreferencesManager @Inject constructor(
         val RECORD_CONTENT = booleanPreferencesKey("record_content")
         val NOTIFICATION_PERMISSION = booleanPreferencesKey("notification_permission")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val MY_PHONE_NUMBERS = stringPreferencesKey("my_phone_numbers")  // 逗号分隔
     }
 
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
+        val raw = prefs[Keys.MY_PHONE_NUMBERS] ?: ""
+        val numbers = if (raw.isBlank()) emptyList() else raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
         UserPreferences(
             recordContent = prefs[Keys.RECORD_CONTENT] ?: false,
             notificationPermissionGranted = prefs[Keys.NOTIFICATION_PERMISSION] ?: false,
-            themeMode = prefs[Keys.THEME_MODE] ?: "system"
+            themeMode = prefs[Keys.THEME_MODE] ?: "system",
+            myPhoneNumbers = numbers
         )
     }
 
@@ -49,5 +54,9 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { it[Keys.THEME_MODE] = mode }
+    }
+
+    suspend fun setMyPhoneNumbers(numbers: List<String>) {
+        context.dataStore.edit { it[Keys.MY_PHONE_NUMBERS] = numbers.joinToString(",") }
     }
 }

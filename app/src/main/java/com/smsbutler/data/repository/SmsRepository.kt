@@ -24,4 +24,8 @@ class SmsRepository @Inject constructor(
     suspend fun toggleStar(id: Long, starred: Boolean) = dao.toggleStar(id, starred)
 
     suspend fun deleteAll() = dao.deleteAll()
+
+    suspend fun updateReceiverPhone(recordId: Long, receiverPhone: String) {
+        // Future: allow manual changing of receiver phone
+    }
 }

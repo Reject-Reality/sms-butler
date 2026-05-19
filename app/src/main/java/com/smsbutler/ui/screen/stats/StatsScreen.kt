@@ -57,7 +57,7 @@ fun StatsScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(state.summaries, key = { it.phoneNumber }) { summary ->
+                items(state.summaries, key = { "${it.receiverPhoneNumber}_${it.phoneNumber}" }) { summary ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -76,6 +76,13 @@ fun StatsScreen(
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
+                                if (summary.receiverPhoneNumber.isNotBlank()) {
+                                    Text(
+                                        text = "📱 ${summary.receiverPhoneNumber}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                             Text(
                                 text = "${summary.count} 条",

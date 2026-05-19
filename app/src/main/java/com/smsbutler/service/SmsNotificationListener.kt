@@ -4,11 +4,13 @@ import android.annotation.SuppressLint
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.smsbutler.data.local.PreferencesManager
 import com.smsbutler.data.local.SmsRecordEntity
 import com.smsbutler.data.repository.SmsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -17,6 +19,7 @@ import javax.inject.Inject
 class SmsNotificationListener : NotificationListenerService() {
 
     @Inject lateinit var repository: SmsRepository
+    @Inject lateinit var preferences: PreferencesManager
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -113,15 +116,22 @@ class SmsNotificationListener : NotificationListenerService() {
         // App 标签
         val appLabel = getAppLabel(packageName)
 
+        // 获取用户设置的本机号码（用于标记哪张卡收到短信）
+        val myNumbers = runCatching {
+            kotlinx.coroutines.runBlocking { preferences.preferences.first().myPhoneNumbers }
+        }.getOrDefault(emptyList())
+        val receiverPhone = myNumbers.firstOrNull() ?: ""
+
         val record = SmsRecordEntity(
             phoneNumber = phoneNumber,
             sender = senderDisplayName,
+            receiverPhoneNumber = receiverPhone,
             content = content ?: "",
             category = category,
             appLabel = appLabel
         )
 
-        Log.i("SmsButler", "插入记录: phone=$phoneNumber, sender=$senderDisplayName, content=$content, app=$appLabel")
+        Log.i("SmsButler", "插入记录: phone=$phoneNumber, sender=$senderDisplayName, receiver=$receiverPhone, app=$appLabel")
 
         scope.launch {
             repository.insertRecord(record)
