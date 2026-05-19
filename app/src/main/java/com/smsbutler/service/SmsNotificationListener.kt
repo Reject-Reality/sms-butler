@@ -108,10 +108,20 @@ class SmsNotificationListener : NotificationListenerService() {
         val personPhone = extractPhoneFromPeople(extras)
 
         // 从所有文本中提取手机号
-        val phoneNumber = extractPhoneNumber(allText)
+        var phoneNumber = extractPhoneNumber(allText)
             ?: extractPhoneNumber(title)
             ?: personPhone  // 从 Person URI 中提取
             ?: senderDisplayName
+
+        // 如果没提取到真实手机号（仍是服务号或文本名），从短信数据库查
+        if (phoneNumber == senderDisplayName || phoneNumber.length > 15 || !phoneNumber.matches(Regex("1[3-9]\\d{9}"))) {
+            val dbPhone = querySmsInbox(content)
+            if (dbPhone != null) {
+                Log.d("SmsButler", "  从短信数据库匹配到: $dbPhone")
+                phoneNumber = dbPhone
+                // 如果内容没变，留 sender 不变；否则更新
+            }
+        }
 
         // 短信内容
         val content = text.takeIf { it.isNotBlank() }
@@ -144,6 +154,39 @@ class SmsNotificationListener : NotificationListenerService() {
         scope.launch {
             repository.insertRecord(record)
         }
+    }
+
+    /**
+     * 从系统短信收件箱查询匹配内容的发送方号码
+     */
+    private fun querySmsInbox(body: String?): String? {
+        if (body.isNullOrBlank()) return null
+        try {
+            val cursor = contentResolver.query(
+                android.provider.Telephony.Sms.Inbox.CONTENT_URI,
+                arrayOf("address", "body"),
+                null, null,
+                "date DESC LIMIT 10"
+            ) ?: return null
+
+            cursor.use {
+                while (it.moveToNext()) {
+                    val address = it.getString(0) ?: continue
+                    val msgBody = it.getString(1) ?: continue
+                    if (msgBody.contains(body.take(20)) || body.contains(msgBody.take(20))) {
+                        Log.d("SmsButler", "  inbox match: address=$address")
+                        // 匹配中国手机号
+                        val phone = extractPhoneNumber(address)
+                        if (phone != null) return phone
+                    }
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.w("SmsButler", "  无 READ_SMS 权限，无法查询短信数据库")
+        } catch (e: Exception) {
+            Log.w("SmsButler", "  查询短信数据库失败: ${e.message}")
+        }
+        return null
     }
 
     private fun extractPhoneFromPeople(extras: android.os.Bundle): String? {
