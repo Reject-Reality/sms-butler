@@ -104,6 +104,9 @@ class SmsNotificationListener : NotificationListenerService() {
             ?: title.takeIf { it.isNotBlank() }
             ?: packageName
 
+        // 短信内容
+        val content = text.takeIf { it.isNotBlank() }
+
         // 尝试从 Person 对象获取手机号（最常见的位置）
         val personPhone = extractPhoneFromPeople(extras)
 
@@ -119,12 +122,8 @@ class SmsNotificationListener : NotificationListenerService() {
             if (dbPhone != null) {
                 Log.d("SmsButler", "  从短信数据库匹配到: $dbPhone")
                 phoneNumber = dbPhone
-                // 如果内容没变，留 sender 不变；否则更新
             }
         }
-
-        // 短信内容
-        val content = text.takeIf { it.isNotBlank() }
 
         // 分类
         val category = categorizeSms(allText)
