@@ -1,6 +1,7 @@
 package com.smsbutler.data.local
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -22,7 +23,7 @@ data class UserPreferences(
 
 @Singleton
 class PreferencesManager @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     private object Keys {
         val RECORD_CONTENT = booleanPreferencesKey("record_content")
