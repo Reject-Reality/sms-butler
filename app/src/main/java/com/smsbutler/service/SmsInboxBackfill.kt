@@ -10,6 +10,7 @@ import android.telephony.SubscriptionManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.smsbutler.data.local.PreferencesManager
+import com.smsbutler.data.local.SmsRecordEntity
 import com.smsbutler.data.repository.SmsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
