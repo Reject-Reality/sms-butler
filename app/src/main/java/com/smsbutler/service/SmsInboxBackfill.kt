@@ -44,7 +44,17 @@ class SmsInboxBackfill @Inject constructor(
             if (row.id > newestSeenId) newestSeenId = row.id
             if (row.receivedAt > newestSeenAt) newestSeenAt = row.receivedAt
 
-            if (SmsFingerprint.hasDuplicate(row.senderPhone, row.body, row.receivedAt, repository.getRecordsAround(row.receivedAt))) {
+            val existingRecords = repository.getRecordsAround(row.receivedAt)
+
+            if (SmsFingerprint.hasDuplicate(row.senderPhone, row.body, row.receivedAt, existingRecords)) {
+                // 已有记录但 receiver 为空 → 补填 SIM 信息
+                val receiverPhone = resolver.resolve(
+                    subscriptionId = row.subscriptionId,
+                    myPhoneNumbers = prefs.myPhoneNumbers
+                )
+                if (receiverPhone.isNotBlank()) {
+                    patchEmptyReceivers(existingRecords, row, receiverPhone)
+                }
                 return@forEach
             }
 
@@ -87,7 +97,16 @@ class SmsInboxBackfill @Inject constructor(
         rows.forEach { row ->
             if (row.id > newestSeenId) newestSeenId = row.id
             if (row.receivedAt > newestSeenAt) newestSeenAt = row.receivedAt
-            if (SmsFingerprint.hasDuplicate(row.senderPhone, row.body, row.receivedAt, repository.getRecordsAround(row.receivedAt))) {
+            val existingRecords = repository.getRecordsAround(row.receivedAt)
+
+            if (SmsFingerprint.hasDuplicate(row.senderPhone, row.body, row.receivedAt, existingRecords)) {
+                val receiverPhone = resolver.resolve(
+                    subscriptionId = row.subscriptionId,
+                    myPhoneNumbers = prefs.myPhoneNumbers
+                )
+                if (receiverPhone.isNotBlank()) {
+                    patchEmptyReceivers(existingRecords, row, receiverPhone)
+                }
                 return@forEach
             }
 
@@ -272,6 +291,28 @@ class SmsInboxBackfill @Inject constructor(
     private fun Cursor.getIntOrNull(column: String): Int? {
         val index = getColumnIndex(column)
         return if (index >= 0) getInt(index) else null
+    }
+
+    private suspend fun patchEmptyReceivers(
+        existing: List<SmsRecordEntity>,
+        row: InboxSms,
+        receiverPhone: String
+    ) {
+        existing.forEach { record ->
+            if (record.receiverPhoneNumber.isBlank() &&
+                SmsFingerprint.isDuplicate(
+                    senderA = row.senderPhone,
+                    bodyA = row.body,
+                    atA = row.receivedAt,
+                    senderB = record.phoneNumber,
+                    bodyB = record.content,
+                    atB = record.receivedAt
+                )
+            ) {
+                repository.updateReceiverPhone(record.id, receiverPhone)
+                Log.d("SmsButler", "Patched receiver for record #${record.id}: $receiverPhone")
+            }
+        }
     }
 }
 

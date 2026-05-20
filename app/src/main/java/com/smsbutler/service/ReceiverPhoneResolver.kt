@@ -17,7 +17,7 @@ class ReceiverPhoneResolver(
         }
         val systemNumber = readSystemPhoneNumber(subscriptionId)
         val simSlotIndex = readSimSlotIndex(subscriptionId)
-        return resolveBestEffort(systemNumber, simSlotIndex, myPhoneNumbers)
+        return resolveBestEffort(systemNumber, simSlotIndex, subscriptionId, myPhoneNumbers)
     }
 
     @Suppress("DEPRECATION")
@@ -79,6 +79,7 @@ class ReceiverPhoneResolver(
         internal fun resolveBestEffort(
             systemNumber: String?,
             simSlotIndex: Int?,
+            subscriptionId: Int,
             myPhoneNumbers: List<String>
         ): String {
             if (!systemNumber.isNullOrBlank()) return systemNumber
@@ -87,18 +88,19 @@ class ReceiverPhoneResolver(
             }
             if (myPhoneNumbers.size == 1) return myPhoneNumbers.first()
 
-            // 无法确定具体号码但知道 SIM 槽 → 标记为 SIM 1 / SIM 2
-            if (simSlotIndex != null && simSlotIndex >= 0) {
-                return "${SIM_LABEL_PREFIX}${simSlotIndex + 1}"
+            // 有 subscriptionId → 生成 SIM 标签（不需要 READ_PHONE_STATE 权限）
+            if (subscriptionId != SubscriptionManager.INVALID_SUBSCRIPTION_ID && subscriptionId > 0) {
+                return "${SIM_LABEL_PREFIX}${subscriptionId}"
             }
+
             return ""
         }
 
         fun isSimLabel(value: String): Boolean = value.startsWith(SIM_LABEL_PREFIX)
 
         fun simLabelToDisplay(value: String): String {
-            val slot = value.removePrefix(SIM_LABEL_PREFIX).toIntOrNull() ?: return value
-            return "SIM $slot"
+            val subId = value.removePrefix(SIM_LABEL_PREFIX).toIntOrNull() ?: return value
+            return "SIM $subId"
         }
     }
 }
