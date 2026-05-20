@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.smsbutler.data.local.PreferencesManager
 import com.smsbutler.data.local.SmsRecordEntity
 import com.smsbutler.data.repository.SmsRepository
+import com.smsbutler.service.SmsInboxBackfill
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,8 @@ data class HomeUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: SmsRepository,
-    private val preferences: PreferencesManager
+    private val preferences: PreferencesManager,
+    private val smsInboxBackfill: SmsInboxBackfill
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -51,6 +53,12 @@ class HomeViewModel @Inject constructor(
     fun assignReceiverPhone(recordId: Long, phone: String) {
         viewModelScope.launch {
             repository.updateReceiverPhone(recordId, phone)
+        }
+    }
+
+    fun forceSyncRecentSms() {
+        viewModelScope.launch {
+            smsInboxBackfill.forceSyncRecentInbox()
         }
     }
 }
