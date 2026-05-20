@@ -29,8 +29,14 @@ interface SmsRecordDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(record: SmsRecordEntity)
 
+    @Query("SELECT * FROM sms_records WHERE receivedAt BETWEEN :startAt AND :endAt ORDER BY receivedAt DESC")
+    suspend fun getRecordsAround(startAt: Long, endAt: Long): List<SmsRecordEntity>
+
     @Query("UPDATE sms_records SET isStarred = :starred WHERE id = :id")
     suspend fun toggleStar(id: Long, starred: Boolean)
+
+    @Query("UPDATE sms_records SET receiverPhoneNumber = :receiverPhone WHERE id = :id")
+    suspend fun updateReceiverPhone(id: Long, receiverPhone: String)
 
     @Query("DELETE FROM sms_records")
     suspend fun deleteAll()

@@ -1,227 +1,169 @@
 package com.smsbutler.ui.screen.home
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import android.content.ComponentName
-import android.content.Intent
-import android.provider.Settings
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Sms
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.smsbutler.data.local.SmsRecordEntity
-import com.smsbutler.service.SmsNotificationListener
-import java.text.SimpleDateFormat
-import java.util.*
+import com.smsbutler.permissions.SmsPermissions
+import com.smsbutler.ui.components.ButlerBackground
+import com.smsbutler.ui.components.EmptyState
+import com.smsbutler.ui.components.ScreenHeader
+import com.smsbutler.ui.components.SmsRecordCard
+import com.smsbutler.ui.components.StatusBanner
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onRecordClick: (SmsRecordEntity) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-
     val context = LocalContext.current
-    val hasPermission = remember {
-        val enabled = NotificationManagerCompat.getEnabledListenerPackages(context)
-        val myComponent = ComponentName(context, SmsNotificationListener::class.java)
-        enabled.any { it == myComponent.flattenToString() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var hasPermission by remember { mutableStateOf(hasSmsCorePermissions(context)) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        hasPermission = hasSmsCorePermissions(context)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("短信助手") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            )
-        }
-    ) { padding ->
-        if (!hasPermission) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .clickable {
-                        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                    },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Warning, null, tint = MaterialTheme.colorScheme.error)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text("通知权限未开启", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                        Text("点击前往设置 → 找到「短信助手」→ 开启", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermission = hasSmsCorePermissions(context)
             }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
-        if (state.isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (state.records.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "暂无短信记录",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+        ButlerBackground {
+            if (state.isLoading) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (state.records.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    ScreenHeader(
+                        title = "短信助手",
+                        subtitle = "自动归档真实收到的短信，帮你分清来源、号码和关键内容。",
+                        icon = Icons.Outlined.Sms
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "去「设置 → 我的手机号」添加你的号码\n收到短信后会自动记录",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
+                    if (!hasPermission) {
+                        StatusBanner(
+                            icon = Icons.Outlined.NotificationsOff,
+                            title = "短信权限未完整开启",
+                            message = "点此授权接收和读取短信，才能记录并补同步验证码。",
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            isError = true,
+                            onClick = {
+                                permissionLauncher.launch(SmsPermissions.requiredRuntimePermissions)
+                            }
+                        )
+                    }
+                    EmptyState(
+                        icon = Icons.Outlined.Inbox,
+                        title = "暂无短信记录",
+                        message = "在设置中添加你的手机号，收到短信后会自动显示在这里。",
+                        modifier = Modifier.weight(1f)
                     )
                 }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(state.records, key = { it.id }) { record ->
-                    SmsRecordCard(
-                        record = record,
-                        onClick = { onRecordClick(record) },
-                        onStarClick = { viewModel.toggleStar(record.id, record.isStarred) }
-                    )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        ScreenHeader(
+                            title = "短信助手",
+                            subtitle = "共 ${state.records.size} 条记录，按最新接收时间排列。",
+                            icon = Icons.Outlined.Sms,
+                            trailing = {
+                                FilledTonalButton(onClick = { viewModel.forceSyncRecentSms() }) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("同步")
+                                }
+                            }
+                        )
+                    }
+                    if (!hasPermission) {
+                        item {
+                            StatusBanner(
+                                icon = Icons.Outlined.NotificationsOff,
+                                title = "短信权限未完整开启",
+                                message = "点此授权接收和读取短信，才能记录并补同步验证码。",
+                                modifier = Modifier.padding(horizontal = 18.dp),
+                                isError = true,
+                                onClick = {
+                                    permissionLauncher.launch(SmsPermissions.requiredRuntimePermissions)
+                                }
+                            )
+                        }
+                    }
+                    items(state.records, key = { it.id }) { record ->
+                        SmsRecordCard(
+                            record = record,
+                            onClick = { onRecordClick(record) },
+                            onStarClick = { viewModel.toggleStar(record.id, record.isStarred) },
+                            modifier = Modifier.padding(horizontal = 18.dp),
+                            myPhoneNumbers = state.myPhoneNumbers,
+                            onAssignReceiver = { phone -> viewModel.assignReceiverPhone(record.id, phone) }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-fun SmsRecordCard(
-    record: SmsRecordEntity,
-    onClick: () -> Unit,
-    onStarClick: () -> Unit
-) {
-    val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault())
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = record.phoneNumber,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    if (record.receiverPhoneNumber.isNotBlank()) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = MaterialTheme.shapes.extraSmall
-                        ) {
-                            Text(
-                                text = "📱 ${record.receiverPhoneNumber}",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    } else {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = MaterialTheme.shapes.extraSmall
-                        ) {
-                            Text(
-                                text = "未标记",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = record.appLabel ?: record.sender,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.secondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (record.category != null) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        SuggestionChip(
-                            onClick = {},
-                            label = {
-                                Text(record.category, style = MaterialTheme.typography.labelSmall)
-                            }
-                        )
-                    }
-                }
-                if (record.content != null && record.recordedContent) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = record.content,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = dateFormat.format(Date(record.receivedAt)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-            IconButton(onClick = onStarClick) {
-                Icon(
-                    imageVector = if (record.isStarred) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                    contentDescription = if (record.isStarred) "取消收藏" else "收藏",
-                    tint = if (record.isStarred) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
+private fun hasSmsCorePermissions(context: android.content.Context): Boolean {
+    return SmsPermissions.canReceiveSms(context) && SmsPermissions.canReadSms(context)
 }

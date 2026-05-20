@@ -7,7 +7,6 @@ import android.provider.Telephony
 import android.telephony.SubscriptionManager
 import android.util.Log
 import com.smsbutler.data.local.PreferencesManager
-import com.smsbutler.data.local.SmsRecordEntity
 import com.smsbutler.data.repository.SmsRepository
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -27,61 +26,68 @@ class SmsReceiver : BroadcastReceiver() {
         fun preferences(): PreferencesManager
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
-
-        val entryPoint = EntryPointAccessors.fromApplication(context, SmsReceiverEntryPoint::class.java)
-        val repository = entryPoint.repository()
-        val preferences = entryPoint.preferences()
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         if (messages.isNullOrEmpty()) return
 
-        val subId = intent.getIntExtra("subscription", SubscriptionManager.INVALID_SUBSCRIPTION_ID)
-        Log.d("SmsButler", "SMS_RECEIVED: messages=${messages.size}, subscriptionId=$subId")
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val entryPoint = EntryPointAccessors.fromApplication(context, SmsReceiverEntryPoint::class.java)
+                val repository = entryPoint.repository()
+                val preferences = entryPoint.preferences()
+                val userPreferences = preferences.preferences.first()
 
-        val myNumbers = runCatching {
-            kotlinx.coroutines.runBlocking { preferences.preferences.first().myPhoneNumbers }
-        }.getOrDefault(emptyList())
+                val subscriptionId = extractSubscriptionId(intent)
+                val receiverPhone = ReceiverPhoneResolver(context).resolve(
+                    subscriptionId = subscriptionId,
+                    myPhoneNumbers = userPreferences.myPhoneNumbers
+                )
 
-        val receiverPhone = if (myNumbers.size == 1) {
-            myNumbers.first()
-        } else if (subId in 0 until myNumbers.size) {
-            myNumbers[subId]  // subscription = SIM 卡槽序号
-        } else {
-            ""  // 多卡但无法匹配时留空
-        }
+                val senderPhone = messages.firstNotNullOfOrNull { it.originatingAddress?.takeIf(String::isNotBlank) }
+                    ?: return@launch
+                val messageBody = SmsRecordFactory.mergeMessageBodies(messages.map { it.messageBody })
+                val receivedAt = messages.firstOrNull()?.timestampMillis ?: System.currentTimeMillis()
 
-        for (message in messages) {
-            val senderPhone = message.originatingAddress ?: continue
-            val msgBody = message.messageBody ?: ""
+                Log.d(
+                    "SmsButler",
+                    "SMS_RECEIVED: parts=${messages.size}, subscriptionId=$subscriptionId, sender=$senderPhone, receiver=$receiverPhone"
+                )
 
-            Log.d("SmsButler", "  from=$senderPhone, body=${msgBody.take(50)}, receiver=$receiverPhone, subId=$subId")
-
-            val record = SmsRecordEntity(
-                phoneNumber = senderPhone,
-                sender = senderPhone,
-                receiverPhoneNumber = receiverPhone,
-                content = msgBody,
-                category = categorizeSms(msgBody),
-                appLabel = ""
-            )
-
-            scope.launch {
+                val record = SmsRecordFactory.buildRecord(
+                    senderPhone = senderPhone,
+                    messageBody = messageBody,
+                    receiverPhone = receiverPhone,
+                    recordContent = userPreferences.recordContent,
+                    receivedAt = receivedAt
+                )
+                if (SmsFingerprint.hasDuplicate(senderPhone, messageBody, receivedAt, repository.getRecordsAround(receivedAt))) {
+                    return@launch
+                }
                 repository.insertRecord(record)
+            } catch (e: Exception) {
+                Log.e("SmsButler", "Failed to record SMS: ${e.message}", e)
+            } finally {
+                pendingResult.finish()
             }
         }
     }
 
-    private fun categorizeSms(text: String): String {
-        return when {
-            text.contains("验证码") || text.contains("校验码") || text.contains("驗證碼") -> "验证码"
-            text.contains("广告") || text.contains("推广") || text.contains("优惠") -> "广告"
-            text.contains("流量") || text.contains("余额") || text.contains("账单") -> "运营商"
-            text.contains("快递") || text.contains("物流") || text.contains("包裹") -> "快递"
-            else -> "通知"
-        }
+    private fun extractSubscriptionId(intent: Intent): Int {
+        val keys = listOf(
+            "subscription",
+            "subscription_id",
+            "android.telephony.extra.SUBSCRIPTION_INDEX",
+            "android.telephony.extra.SUBSCRIPTION_ID",
+            "slot",
+            "simSlot",
+            "sim_slot"
+        )
+        return keys.firstNotNullOfOrNull { key ->
+            intent.getIntExtra(key, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+                .takeIf { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+        } ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
     }
 }

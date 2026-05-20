@@ -1,16 +1,18 @@
 package com.smsbutler.ui.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.automirrored.filled.ManageSearch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.ManageSearch
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -28,7 +30,7 @@ import com.smsbutler.ui.screen.stats.StatsScreen
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "记录", Icons.Filled.Home)
     object Stats : Screen("stats", "统计", Icons.Filled.BarChart)
-    object Search : Screen("search", "搜索", Icons.Filled.ManageSearch)
+    object Search : Screen("search", "搜索", Icons.AutoMirrored.Filled.ManageSearch)
     object Settings : Screen("settings", "设置", Icons.Filled.Settings)
     object Detail : Screen("detail/{phoneNumber}", "详情", Icons.Filled.Home)
 }
@@ -40,26 +42,34 @@ fun SmsButlerNavGraph() {
     val currentDestination = navBackStackEntry?.destination
 
     val bottomScreens = listOf(Screen.Home, Screen.Stats, Screen.Search, Screen.Settings)
+    val showBottomBar = bottomScreens.any { screen ->
+        currentDestination?.hierarchy?.any { it.route == screen.route } == true
+    }
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                bottomScreens.forEach { screen ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                    NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title) },
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (showBottomBar) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp
+                ) {
+                    bottomScreens.forEach { screen ->
+                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        NavigationBarItem(
+                            icon = { Icon(screen.icon, contentDescription = screen.title) },
+                            label = { Text(screen.title) },
+                            selected = selected,
+                            onClick = {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -71,17 +81,17 @@ fun SmsButlerNavGraph() {
         ) {
             composable(Screen.Home.route) {
                 HomeScreen(onRecordClick = { record ->
-                    navController.navigate("detail/${record.phoneNumber}")
+                    navController.navigate("detail/${Uri.encode(record.phoneNumber)}")
                 })
             }
             composable(Screen.Search.route) {
                 SearchScreen(onRecordClick = { record ->
-                    navController.navigate("detail/${record.phoneNumber}")
+                    navController.navigate("detail/${Uri.encode(record.phoneNumber)}")
                 })
             }
             composable(Screen.Stats.route) {
                 StatsScreen(onPhoneClick = { phone ->
-                    navController.navigate("detail/$phone")
+                    navController.navigate("detail/${Uri.encode(phone)}")
                 })
             }
             composable(Screen.Settings.route) {

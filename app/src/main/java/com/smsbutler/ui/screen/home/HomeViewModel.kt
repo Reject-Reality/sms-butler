@@ -2,6 +2,7 @@ package com.smsbutler.ui.screen.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smsbutler.data.local.PreferencesManager
 import com.smsbutler.data.local.SmsRecordEntity
 import com.smsbutler.data.repository.SmsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,12 +14,14 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val records: List<SmsRecordEntity> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val myPhoneNumbers: List<String> = emptyList()
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val repository: SmsRepository
+    private val repository: SmsRepository,
+    private val preferences: PreferencesManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -26,11 +29,15 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.getAllRecords().collect { records ->
-                _uiState.value = HomeUiState(
-                    records = records,
-                    isLoading = false
-                )
+            launch {
+                repository.getAllRecords().collect { records ->
+                    _uiState.value = _uiState.value.copy(records = records, isLoading = false)
+                }
+            }
+            launch {
+                preferences.preferences.collect { prefs ->
+                    _uiState.value = _uiState.value.copy(myPhoneNumbers = prefs.myPhoneNumbers)
+                }
             }
         }
     }
@@ -38,6 +45,12 @@ class HomeViewModel @Inject constructor(
     fun toggleStar(id: Long, currentStarred: Boolean) {
         viewModelScope.launch {
             repository.toggleStar(id, !currentStarred)
+        }
+    }
+
+    fun assignReceiverPhone(recordId: Long, phone: String) {
+        viewModelScope.launch {
+            repository.updateReceiverPhone(recordId, phone)
         }
     }
 }

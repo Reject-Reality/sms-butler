@@ -1,27 +1,28 @@
 package com.smsbutler.ui.screen.settings
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.net.Uri
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smsbutler.data.local.PreferencesManager
-import com.smsbutler.service.SmsNotificationListener
+import com.smsbutler.permissions.SmsPermissions
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SettingsUiState(
     val recordContent: Boolean = false,
-    val notificationAccess: Boolean = false,
+    val smsReceivePermission: Boolean = false,
+    val smsReadPermission: Boolean = false,
+    val phoneNumberPermission: Boolean = false,
+    val notificationListenerPermission: Boolean = false,
     val myPhoneNumbers: List<String> = emptyList(),
     val newPhoneNumber: String = ""
 )
@@ -40,18 +41,38 @@ class SettingsViewModel @Inject constructor(
             preferencesManager.preferences.collect { prefs ->
                 _uiState.value = _uiState.value.copy(
                     recordContent = prefs.recordContent,
-                    notificationAccess = isNotificationListenerEnabled(),
+                    smsReceivePermission = SmsPermissions.canReceiveSms(context),
+                    smsReadPermission = SmsPermissions.canReadSms(context),
+                    phoneNumberPermission = SmsPermissions.canReadPhoneNumbers(context),
+                    notificationListenerPermission = isNotificationListenerEnabled(),
                     myPhoneNumbers = prefs.myPhoneNumbers
                 )
             }
         }
     }
 
+    fun refreshPermissionState() {
+        _uiState.value = _uiState.value.copy(
+            smsReceivePermission = SmsPermissions.canReceiveSms(context),
+            smsReadPermission = SmsPermissions.canReadSms(context),
+            phoneNumberPermission = SmsPermissions.canReadPhoneNumbers(context),
+            notificationListenerPermission = isNotificationListenerEnabled()
+        )
+    }
+
     fun toggleRecordContent(enabled: Boolean) {
         viewModelScope.launch { preferencesManager.setRecordContent(enabled) }
     }
 
-    fun openNotificationSettings() {
+    fun openAppPermissionSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
+    fun openNotificationListenerSettings() {
         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -84,8 +105,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun isNotificationListenerEnabled(): Boolean {
-        val enabledListeners = NotificationManagerCompat.getEnabledListenerPackages(context)
-        val myComponent = ComponentName(context, SmsNotificationListener::class.java)
-        return enabledListeners.any { it == myComponent.flattenToString() }
+        val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(context)
+        return context.packageName in enabledPackages
     }
 }

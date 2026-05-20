@@ -21,11 +21,18 @@ class SmsRepository @Inject constructor(
 
     suspend fun insertRecord(record: SmsRecordEntity) = dao.insert(record)
 
+    suspend fun getRecordsAround(receivedAt: Long, toleranceMillis: Long = 120_000): List<SmsRecordEntity> {
+        return dao.getRecordsAround(
+            startAt = receivedAt - toleranceMillis,
+            endAt = receivedAt + toleranceMillis
+        )
+    }
+
     suspend fun toggleStar(id: Long, starred: Boolean) = dao.toggleStar(id, starred)
 
     suspend fun deleteAll() = dao.deleteAll()
 
     suspend fun updateReceiverPhone(recordId: Long, receiverPhone: String) {
-        // Future: allow manual changing of receiver phone
+        dao.updateReceiverPhone(recordId, receiverPhone)
     }
 }
