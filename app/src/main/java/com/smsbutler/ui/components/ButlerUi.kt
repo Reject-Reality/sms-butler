@@ -357,16 +357,17 @@ fun SmsRecordCard(
                     val showReceiverMenu = (record.receiverPhoneNumber.isBlank() || isSimLabel)
                         && myPhoneNumbers.size > 1 && onAssignReceiver != null
                     var menuExpanded by remember { mutableStateOf(false) }
-                    Box {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .then(
+                                if (showReceiverMenu) Modifier.clickable { menuExpanded = true }
+                                else Modifier
+                            )
+                    ) {
                         MetaChip(
                             text = receiverDisplay,
-                            selected = !record.receiverPhoneNumber.isBlank() && !isSimLabel,
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .then(
-                                    if (showReceiverMenu) Modifier.clickable { menuExpanded = true }
-                                    else Modifier
-                                )
+                            selected = !record.receiverPhoneNumber.isBlank() && !isSimLabel
                         )
                         if (showReceiverMenu) {
                             DropdownMenu(
