@@ -74,6 +74,8 @@ class ReceiverPhoneResolver(
     }
 
     companion object {
+        private const val SIM_LABEL_PREFIX = "sim:"
+
         internal fun resolveBestEffort(
             systemNumber: String?,
             simSlotIndex: Int?,
@@ -83,7 +85,20 @@ class ReceiverPhoneResolver(
             if (simSlotIndex != null && simSlotIndex in myPhoneNumbers.indices) {
                 return myPhoneNumbers[simSlotIndex]
             }
-            return if (myPhoneNumbers.size == 1) myPhoneNumbers.first() else ""
+            if (myPhoneNumbers.size == 1) return myPhoneNumbers.first()
+
+            // 无法确定具体号码但知道 SIM 槽 → 标记为 SIM 1 / SIM 2
+            if (simSlotIndex != null && simSlotIndex >= 0) {
+                return "${SIM_LABEL_PREFIX}${simSlotIndex + 1}"
+            }
+            return ""
+        }
+
+        fun isSimLabel(value: String): Boolean = value.startsWith(SIM_LABEL_PREFIX)
+
+        fun simLabelToDisplay(value: String): String {
+            val slot = value.removePrefix(SIM_LABEL_PREFIX).toIntOrNull() ?: return value
+            return "SIM $slot"
         }
     }
 }

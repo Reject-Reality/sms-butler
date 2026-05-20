@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.smsbutler.data.local.SmsRecordEntity
+import com.smsbutler.service.ReceiverPhoneResolver
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -346,12 +347,20 @@ fun SmsRecordCard(
                 ) {
                     MetaChip(text = sender, selected = true, modifier = Modifier.weight(1f, fill = false))
 
-                    // 接收号码：未标记时可点击选择
-                    val showReceiverMenu = record.receiverPhoneNumber.isBlank() && myPhoneNumbers.size > 1 && onAssignReceiver != null
+                    // 接收号码：未标记或 SIM 标记时可点击选择
+                    val isSimLabel = ReceiverPhoneResolver.isSimLabel(record.receiverPhoneNumber)
+                    val receiverDisplay = when {
+                        record.receiverPhoneNumber.isBlank() -> "未标记"
+                        isSimLabel -> ReceiverPhoneResolver.simLabelToDisplay(record.receiverPhoneNumber)
+                        else -> "📱 ${record.receiverPhoneNumber}"
+                    }
+                    val showReceiverMenu = (record.receiverPhoneNumber.isBlank() || isSimLabel)
+                        && myPhoneNumbers.size > 1 && onAssignReceiver != null
                     var menuExpanded by remember { mutableStateOf(false) }
                     Box {
                         MetaChip(
-                            text = if (record.receiverPhoneNumber.isBlank()) "未标记" else "📱 ${record.receiverPhoneNumber}",
+                            text = receiverDisplay,
+                            selected = !record.receiverPhoneNumber.isBlank() && !isSimLabel,
                             modifier = Modifier
                                 .weight(1f, fill = false)
                                 .then(
